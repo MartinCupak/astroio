@@ -100,7 +100,7 @@ Voltages Voltages::from_dat_file(const std::string& filename, const ObservationI
         We allocate slightly more memory than simply nComplexSamples so we can avoid dealing with
         the boundary condition happening when obsInfo.nTimesteps % nIntegrationSteps != 0. 
     */
-    MemoryBuffer<std::complex<int8_t>> mbVoltages {nIntegrationIntervals * samplesInTimeInterval, false, false};
+    MemoryBuffer<std::complex<int8_t>> mbVoltages {nIntegrationIntervals * samplesInTimeInterval};
     auto voltages = mbVoltages.data();
     memset(voltages, 0, sizeof(std::complex<int8_t>) * nIntegrationIntervals * samplesInTimeInterval);
 
@@ -237,7 +237,7 @@ Voltages Voltages::from_dat_file_gpu(const std::string& filename, const Observat
         input += bytes_read;
     }
     fin.close();
-    MemoryBuffer<std::complex<int8_t>> mbVoltages {nTotalSamples, true, false};
+    MemoryBuffer<std::complex<int8_t>> mbVoltages {nTotalSamples, MemoryType::DEVICE};
     struct gpuDeviceProp_t props;
     int gpu_id = -1;
     gpuGetDevice(&gpu_id);
@@ -259,7 +259,7 @@ Voltages Voltages::from_dat_file_gpu(const std::string& filename, const Observat
 #endif
 
 
-Voltages Voltages::from_memory(const int8_t *buffer, size_t length, const ObservationInfo& obsInfo, unsigned int nIntegrationSteps, bool use_pinned_mem){
+Voltages Voltages::from_memory(const int8_t *buffer, size_t length, const ObservationInfo& obsInfo, unsigned int nIntegrationSteps){
     const size_t bytesPerComplexSample {2}; // 4+4 bits 
     const size_t nSamplesInTimestep {obsInfo.nFrequencies * obsInfo.nAntennas *  obsInfo.nPolarizations};
     const size_t nComplexSamples {obsInfo.nTimesteps * nSamplesInTimestep};
@@ -280,7 +280,7 @@ Voltages Voltages::from_memory(const int8_t *buffer, size_t length, const Observ
         We allocate slightly more memory than simply nComplexSamples so we can avoid dealing with
         the boundary condition happening when obsInfo.nTimesteps % nIntegrationSteps != 0. 
     */
-    MemoryBuffer<std::complex<int8_t>> mbVoltages {nIntegrationIntervals * samplesInTimeInterval, false, use_pinned_mem};
+    MemoryBuffer<std::complex<int8_t>> mbVoltages {nIntegrationIntervals * samplesInTimeInterval};
     auto voltages = mbVoltages.data();
     memset(voltages, 0, sizeof(std::complex<int8_t>) * nIntegrationIntervals * samplesInTimeInterval);
     for(size_t ts = 0; ts < obsInfo.nTimesteps; ts++){
@@ -307,7 +307,7 @@ Voltages Voltages::from_eda2_file(const std::string& filename, const Observation
     char *buffer {nullptr};
     size_t size {0};
     read_data_from_file(filename, buffer, size);
-    auto volt = Voltages::from_memory(reinterpret_cast<int8_t*>(buffer), size, obs_info, nIntegrationSteps, false);
+    auto volt = Voltages::from_memory(reinterpret_cast<int8_t*>(buffer), size, obs_info, nIntegrationSteps);
     delete[] buffer;
     return volt;
 }
@@ -327,7 +327,7 @@ Visibilities Visibilities::from_fits_file(const std::string& filename, const Obs
     
     size_t xcorrSize {obsInfo.nFrequencies * matrixSize * nIntegrationIntervals};
 
-    MemoryBuffer<std::complex<float>> mbXcorr {xcorrSize, false, false};
+    MemoryBuffer<std::complex<float>> mbXcorr {xcorrSize};
     auto xcorr = mbXcorr.data();
     for(size_t idx {0}; idx < nHDUs; idx++){
         auto hdu = fitsImage[idx];

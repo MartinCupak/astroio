@@ -151,8 +151,7 @@ class Voltages : public MemoryBuffer<std::complex<int8_t>> {
      * 
      * TODO: check if we need the edge feature.
      */
-    static Voltages from_memory(const int8_t *buffer, size_t length, const ObservationInfo& obsInfo, unsigned int nIntegrationSteps,\
-        bool use_pinned_mem = false);
+    static Voltages from_memory(const int8_t *buffer, size_t length, const ObservationInfo& obsInfo, unsigned int nIntegrationSteps);
 
 
 

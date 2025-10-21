@@ -51,7 +51,7 @@ void test_memory_buffer_default_constructor(){
     if(mem_cpu) throw TestFailed("'test_memory_buffer_default_constructor' failed: "
         "expected null object after empty constructor.");
     
-    mem_cpu.allocate(5, false, false);
+    mem_cpu.allocate(5);
     auto ptr = mem_cpu.data();
     for(int i {0}; i < 5; i++){
         ptr[i] = i;
