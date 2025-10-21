@@ -275,7 +275,7 @@ class Visibilities : public MemoryBuffer<std::complex<float>> {
      * 
      * @param filename name of the output file.
      */
-    void to_fits_file_mwax(const std::string& filename) const;
+    void to_fits_file_mwax(const std::string& filename, int coarse_channel_idx) const;
 
 
     /**

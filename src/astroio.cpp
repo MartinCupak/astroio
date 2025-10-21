@@ -376,7 +376,7 @@ void Visibilities::to_fits_file(const std::string& filename) const{
 
 
 
-void Visibilities::to_fits_file_mwax(const std::string& filename) const{
+void Visibilities::to_fits_file_mwax(const std::string& filename, int coarse_channel_ord) const{
     float integrationTime {static_cast<float>(obsInfo.timeResolution * nIntegrationSteps)};
     const size_t n_baselines {((obsInfo.nAntennas + 1) * obsInfo.nAntennas) / 2};
     const unsigned int n_pols {obsInfo.nPolarizations * obsInfo.nPolarizations};
@@ -392,6 +392,7 @@ void Visibilities::to_fits_file_mwax(const std::string& filename) const{
     primary_hdu.add_keyword("FINECHAN", obsInfo.frequencyResolution * nAveragedChannels * 1e3, "Fine channel width in KHz");
     primary_hdu.add_keyword("NFINECHS", nFrequencies, "Number of fine channels in coarse channel");
     primary_hdu.add_keyword("NINPUTS", obsInfo.nAntennas * obsInfo.nPolarizations, "Number of RF inputs.");
+    primary_hdu.add_keyword("CORRCHAN", coarse_channel_ord, "0-indexed coarse channel ordinal");
 
     fits_image.add_HDU(primary_hdu);
     MemoryBuffer<float> weights {4 * static_cast<size_t>(n_baselines)};
@@ -409,6 +410,8 @@ void Visibilities::to_fits_file_mwax(const std::string& filename) const{
             }
         }
     }
+    // As a test, set data to zero
+    // std::memset(reinterpret_cast<char*>(reordered_buffer.data()), 0, sizeof(std::complex<float>) * integration_intervals() * n_baselines * nFrequencies * n_pols );
     // currently, all weights should be 1
     for(int i {0}; i < weights.size(); i++) weights[i] = 1.0f;
 
@@ -421,7 +424,6 @@ void Visibilities::to_fits_file_mwax(const std::string& filename) const{
         image_hdu.add_keyword("TIME", static_cast<long>(obsInfo.startTime), "Unix time (seconds)");
         image_hdu.add_keyword("MILLITIM", msElapsed, "Milliseconds since TIME");
         image_hdu.add_keyword("INTTIME", integrationTime, "Integration time (s)");
-        image_hdu.add_keyword("COARSE_CHAN", obsInfo.coarseChannel, "Receiver Coarse Channel Number (only used in offline mode)");
         image_hdu.add_keyword("MARKER", static_cast<int>(interval), "Marker");
         fits_image.add_HDU(image_hdu);
 
