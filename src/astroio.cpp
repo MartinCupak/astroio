@@ -315,7 +315,7 @@ Voltages Voltages::from_eda2_file(const std::string& filename, const Observation
 
 Visibilities Visibilities::from_fits_file(const std::string& filename, const ObservationInfo& oInfo){
 
-    FITS fitsImage {FITS::from_file(filename)};
+    FITS fitsImage {filename, FITS::Mode::READ};
     ObservationInfo obsInfo {oInfo};
     const unsigned int n_baselines {((obsInfo.nAntennas + 1) * obsInfo.nAntennas) / 2};
     const size_t matrixSize {n_baselines * obsInfo.nPolarizations * obsInfo.nPolarizations};
@@ -356,7 +356,7 @@ Visibilities Visibilities::from_fits_file(const std::string& filename, const Obs
 
 
 void Visibilities::to_fits_file(const std::string& filename) const{
-    FITS fitsImage;
+    FITS fitsImage {filename, FITS::Mode::WRITE};
     const size_t nFrequencies {obsInfo.nFrequencies / nAveragedChannels}; 
     // one axis for matrix, one for frequency
     float integrationTime {static_cast<float>(obsInfo.timeResolution * nIntegrationSteps)};
@@ -371,7 +371,7 @@ void Visibilities::to_fits_file(const std::string& filename) const{
         hdu.add_keyword("COARSE_CHAN", obsInfo.coarseChannel, "Receiver Coarse Channel Number (only used in offline mode)");
         fitsImage.add_HDU(hdu);
     }
-    fitsImage.to_file(filename);
+    fitsImage.write();
 }
 
 
@@ -380,7 +380,7 @@ void Visibilities::to_fits_file_mwax(const std::string& filename, int coarse_cha
     float integrationTime {static_cast<float>(obsInfo.timeResolution * nIntegrationSteps)};
     const size_t n_baselines {((obsInfo.nAntennas + 1) * obsInfo.nAntennas) / 2};
     const unsigned int n_pols {obsInfo.nPolarizations * obsInfo.nPolarizations};
-    FITS fits_image;
+    FITS fits_image {filename, FITS::Mode::WRITE};
     // Create primary HDU
     FITS::HDU primary_hdu;
     primary_hdu.add_keyword("TIME", static_cast<long>(obsInfo.startTime), "Unix time (seconds)");
@@ -437,7 +437,7 @@ void Visibilities::to_fits_file_mwax(const std::string& filename, int coarse_cha
         fits_image.add_HDU(weight_hdu);
 
     }
-    fits_image.to_file(filename);
+    fits_image.write();
 }
 
 

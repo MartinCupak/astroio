@@ -24,14 +24,14 @@ void test_fits_equal(){
 void test_write_read_simple_fits(){
     const std::string filename {"myTestFits.fits"};
     char data[] {1, 2, 3, 4};
-    FITS myFITSImage;
+    FITS myFITSImage {filename, FITS::Mode::WRITE};
     FITS::HDU newHDU;
     newHDU.add_keyword("BITPIXOO", 8, "My bitpix keyword.");
     newHDU.set_image(data, 2, 2);
     myFITSImage.add_HDU(std::move(newHDU));
-    myFITSImage.to_file(filename);
+    myFITSImage.write();
     // Read back the same FITS file.
-    auto myFITSImageAgain = FITS::from_file(filename);
+    auto myFITSImageAgain = FITS {filename, FITS::Mode::READ};
     std::remove(filename.c_str());
     auto hdu = myFITSImageAgain[0];
     if(hdu.get_keyword<int>("BITPIXOO").first != 8){

@@ -40,7 +40,7 @@ class Images : public MemoryBuffer<std::complex<float>> {
         this->flags = flags;
     }
 
-    const std::vector<bool>& get_flags() const {return flags;};
+    std::vector<bool>& get_flags() {return flags;};
 
     bool is_flagged(size_t interval, size_t fine_channel) const {
         if(flags.size() == 0) return false;
@@ -91,13 +91,12 @@ class Images : public MemoryBuffer<std::complex<float>> {
     }
     
 
-    void to_fits_file(size_t interval, size_t fine_channel, const std::string& filename, bool save_as_complex = false, bool save_imaginary = false);
-
-
-   void to_fits_files(const std::string& directory_path, bool save_as_complex = false, bool save_imaginary = false);
+    void to_fits_file(const std::string& directory_path, size_t interval, size_t fine_channel, bool save_as_complex = false, bool save_imaginary = false);
+    void to_fits_file(FITS& fits_file, size_t interval, size_t fine_channel, bool save_as_complex = false, bool save_imaginary = false);
+    void to_fits_files(const std::string& directory_path, bool save_as_complex = false, bool save_imaginary = false);
    
 private :
-   void save_fits_file(const std::string filename, float* data, long side_x, long side_y);
+    void save_fits_file(FITS& fits_file, float* data, long side_x, long side_y);
 };
 
 

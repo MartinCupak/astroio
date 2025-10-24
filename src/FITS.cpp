@@ -4,7 +4,8 @@
 #include <regex>
 #include "FITS.hpp"
 
-inline void print_fits_error(int errorCode){
+
+void print_fits_error(int errorCode){
     char statusStr[FLEN_STATUS], errmsg[FLEN_ERRMSG];
     fits_get_errstatus(errorCode, statusStr);
     std::cerr << "Error occurred during a cfitsio call.\n\tCode: " << errorCode << ": " << std::string {statusStr} << std::endl;
@@ -13,13 +14,6 @@ inline void print_fits_error(int errorCode){
         std::cerr << "\t" << std::string {errmsg} << std::endl;
 }
 
-
-#define CHECK_FITS_ERROR(X)({\
-    if((X)){\
-        print_fits_error(status);\
-        throw std::exception();\
-    }\
-})
 
 
 inline bool is_special_keyword(const std::string& key){
@@ -32,6 +26,27 @@ inline bool is_special_keyword(const std::string& key){
     return false; 
 }
 
+FITS::FITS(std::string filename, Mode mode) : filename {filename}, open_mode {mode} {
+    if(mode == Mode::READ)
+        read();
+    else if(mode == Mode::APPEND){
+        int status = 0, nHDUs {-1};
+        if(std::filesystem::exists(filename)){
+            CHECK_FITS_ERROR(fits_open_file(&fitsFP, filename.c_str(), READWRITE, &status));
+            CHECK_FITS_ERROR(fits_get_num_hdus(fitsFP, &nHDUs,  &status));
+            if(nHDUs > 0) CHECK_FITS_ERROR(fits_movabs_hdu(fitsFP, nHDUs, NULL, &status));
+        }else{
+            CHECK_FITS_ERROR(fits_create_file(&fitsFP, filename.c_str(), &status));
+        }
+    }
+}
+
+FITS::~FITS() {
+    if(fitsFP){
+        int status = 0;
+        fits_close_file(fitsFP, &status);
+    }
+}
 
 void FITS::HDU::set_image(int bitpix, char *data, long xDim, long yDim){
     if(this->data) delete[] static_cast<char*>(this->data);
@@ -60,27 +75,17 @@ void FITS::HDU::set_image(int bitpix, char *data, long xDim, long yDim){
 
 
 
-
-
-FITS FITS::from_file(std::string filename){
+void FITS::read(){
     std::ifstream fp {filename.c_str()};
     if(!fp.good()){
         std::cerr << "FITS::from_file: requested file '" << filename << "' does not exist or is inaccessible." << std::endl;
         throw std::exception();
     }
     fp.close();
-    fitsfile *fptr;
     int status {0}, nHDUs {-1};
-    if(fits_open_file(&fptr, filename.c_str(), READONLY, &status)){
-        print_fits_error(status);
-        throw std::exception();
-    }
-    if(fits_get_num_hdus(fptr, &nHDUs,  &status)){
-        print_fits_error(status);
-        throw std::exception();
-    }
-    FITS fitsObj;
-    fitsObj.HDUs.resize(nHDUs);
+    CHECK_FITS_ERROR(fits_open_file(&fitsFP, filename.c_str(), READONLY, &status));
+    CHECK_FITS_ERROR(fits_get_num_hdus(fitsFP, &nHDUs,  &status));
+    HDUs.resize(nHDUs);
 
     int dims;
     int nKeys;
@@ -93,11 +98,11 @@ FITS FITS::from_file(std::string filename){
     char valueCard[FLEN_CARD];
     char commentCard[FLEN_CARD];
     for(int hdu {1}; hdu <= nHDUs; hdu++){
-        HDU& cHDU {fitsObj.HDUs[hdu-1]};
-        CHECK_FITS_ERROR(fits_movabs_hdu(fptr, hdu, NULL, &status));
-        CHECK_FITS_ERROR(fits_get_hdrspace(fptr, &nKeys, NULL, &status));
+        HDU& cHDU {HDUs[hdu-1]};
+        CHECK_FITS_ERROR(fits_movabs_hdu(fitsFP, hdu, NULL, &status));
+        CHECK_FITS_ERROR(fits_get_hdrspace(fitsFP, &nKeys, NULL, &status));
         for(int key {1}; key <= nKeys; key++){
-            CHECK_FITS_ERROR(fits_read_keyn(fptr, key, keyCard, valueCard, commentCard, &status));
+            CHECK_FITS_ERROR(fits_read_keyn(fitsFP, key, keyCard, valueCard, commentCard, &status));
             if(!is_special_keyword(keyCard)){
                 std::stringstream ss;
                 ss << (char*)valueCard;
@@ -118,12 +123,12 @@ FITS FITS::from_file(std::string filename){
             }    
         }
             
-        CHECK_FITS_ERROR(fits_get_img_dim(fptr, &dims, &status));
+        CHECK_FITS_ERROR(fits_get_img_dim(fitsFP, &dims, &status));
         if(dims == 2){
             // it is an actual image.
             // get the data type used
-            CHECK_FITS_ERROR(fits_get_img_type(fptr,&bitPix, &status));
-            CHECK_FITS_ERROR(fits_get_img_size(fptr, dims, axes, &status));
+            CHECK_FITS_ERROR(fits_get_img_type(fitsFP,&bitPix, &status));
+            CHECK_FITS_ERROR(fits_get_img_size(fitsFP, dims, axes, &status));
             data = new char[axes[0] * axes[1] * abs(bitPix) / 8];
             switch (bitPix) {
                 case BYTE_IMG: dataType = TBYTE; break;
@@ -134,51 +139,58 @@ FITS FITS::from_file(std::string filename){
             }
             // read data
             long fPixel[2] {1, 1};
-            CHECK_FITS_ERROR(fits_read_pix(fptr, dataType, fPixel, axes[0] * axes[1], nullptr, data, nullptr, &status));
+            CHECK_FITS_ERROR(fits_read_pix(fitsFP, dataType, fPixel, axes[0] * axes[1], nullptr, data, nullptr, &status));
             cHDU.set_image(bitPix, data, axes[0], axes[1]);
         } else if(dims != 0){ // 0 is an empty HDU - it is ok, just header information.
             std::cerr << "Unexpected number of dimensions in fits file: " << dims << " instead of 2." << std::endl;
             throw std::exception();
         }
     }
-    return fitsObj;
 }
 
 
-void FITS::to_file(std::string filename){
+void FITS::append_hdu(const FITS::HDU& hdu){
+    long axes[2];
+    int status = 0;
+    if(hdu.data == nullptr) {
+        // It is an empty HDU. Probably the primary HDU.
+        // only containing header keywords
+        CHECK_FITS_ERROR(fits_create_img(fitsFP, 32, 0,  nullptr, &status));
+    }else{
+        axes[0] = hdu.get_ydim();
+        axes[1] = hdu.get_xdim();
+        CHECK_FITS_ERROR(fits_create_img(fitsFP, hdu.bitpix, 2,  axes, &status));
+        long fPixel[2] {1, 1};
+        CHECK_FITS_ERROR(fits_write_pix(fitsFP, hdu.datatype, fPixel, axes[0] * axes[1], (char *) hdu.get_image_data(), &status));
+    }
+    for(auto& header_entry : hdu.get_header()){
+    auto key = header_entry.first;
+    auto entry = header_entry.second;
+        status = 0;
+        if(entry.data_type == TSTRING){
+            CHECK_FITS_ERROR(fits_update_key(fitsFP, entry.data_type, key.c_str(), entry.data.sval, entry.comment.c_str(), &status));
+        }else{
+            CHECK_FITS_ERROR(fits_update_key(fitsFP, entry.data_type, key.c_str(), &entry.data, entry.comment.c_str(), &status));
+        }
+    }
+}
+
+
+
+void FITS::write(){
+    if(open_mode != Mode::WRITE) throw std::runtime_error {"'FITS::to_file' can only be called in WRITE mode."};
     std::ifstream fp {filename.c_str()};
     // remove file if exists already - we overwrite by default.
     if(fp.good()){
         fp.close();
         std::remove(filename.c_str());
     }
-    fitsfile *fitsFP;
     int status = 0;
     long axes[2];
     CHECK_FITS_ERROR(fits_create_file(&fitsFP, filename.c_str(), &status));
     for(HDU& cHDU : this->HDUs){
-        status = 0;
-        if(cHDU.data == nullptr) {
-            // It is an empty HDU. Probably the primary HDU.
-            // only containing header keywords
-            CHECK_FITS_ERROR(fits_create_img(fitsFP, 32, 0,  nullptr, &status));
-        }else{
-            axes[0] = cHDU.get_ydim();
-            axes[1] = cHDU.get_xdim();
-            CHECK_FITS_ERROR(fits_create_img(fitsFP, cHDU.bitpix, 2,  axes, &status));
-            long fPixel[2] {1, 1};
-            CHECK_FITS_ERROR(fits_write_pix(fitsFP, cHDU.datatype, fPixel, axes[0] * axes[1], (char *) cHDU.get_image_data(), &status));
-        }
-        for(auto& header_entry : cHDU.get_header()){
-	    auto key = header_entry.first;
-	    auto entry = header_entry.second;
-            status = 0;
-            if(entry.data_type == TSTRING){
-                CHECK_FITS_ERROR(fits_update_key(fitsFP, entry.data_type, key.c_str(), entry.data.sval, entry.comment.c_str(), &status));
-            }else{
-                CHECK_FITS_ERROR(fits_update_key(fitsFP, entry.data_type, key.c_str(), &entry.data, entry.comment.c_str(), &status));
-            }
-        }
+        append_hdu(cHDU);
     }
     CHECK_FITS_ERROR(fits_close_file(fitsFP, &status));
+    fitsFP = nullptr;
 }

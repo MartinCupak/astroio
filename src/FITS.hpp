@@ -10,6 +10,18 @@
 #include <stdexcept>
 #include <cmath>
 #include <iostream>
+#include <filesystem>
+
+
+void print_fits_error(int errorCode);
+
+
+#define CHECK_FITS_ERROR(X)({\
+    if((X)){\
+        print_fits_error(status);\
+        throw std::exception();\
+    }\
+})
 
 /**
  * @brief A class that handles I/O operations on FITS files.
@@ -231,27 +243,51 @@ class FITS {
         }
         
         void *get_image_data(){ return data; }
+        const void *get_image_data() const { return data; }
 
-        long get_xdim() { return axes[1]; }
+        long get_xdim() const { return axes[1]; }
 
-        long get_ydim() { return axes[0]; }
+        long get_ydim() const { return axes[0]; }
 
-        int get_bitpix() { return bitpix; }
+        int get_bitpix() const { return bitpix; }
 
-        int get_datatype() { return datatype; }
+        int get_datatype() const { return datatype; }
 
+        auto get_header() const { return header; }
         auto get_header() { return header; }
     };
 
+    public:
+    // Possible modes a FITS file can be open in.
+    enum class Mode {READ, WRITE, APPEND};
+
+    
     private:
     std::vector<HDU> HDUs;
+    std::string filename;
+    Mode open_mode {Mode::WRITE};
+    fitsfile *fitsFP {nullptr};
+
+    /*Append an HDU to a FITS file when FITS is opened in APPEND mode.*/
+    void append_hdu(const HDU& hdu);
+    // helper function to read a FITS file during object construction.
+    void read();
 
     public:
+    /** When a filename is passed to the constructor, the FITS class instance
+    will operate in append mode, where a file is created, straight away  */
+    FITS(std::string filename, Mode mode = Mode::READ);
+    ~FITS();
+
     void add_HDU(const HDU& hdu, int pos = -1) {
-        if(pos < 0)
-            HDUs.push_back(hdu);
-        else
-            HDUs.insert(HDUs.begin() + pos, hdu);
+        if(open_mode == Mode::APPEND){
+            append_hdu(hdu);
+        }else{
+            if(pos < 0)
+                HDUs.push_back(hdu);
+            else
+                HDUs.insert(HDUs.begin() + pos, hdu);
+        }
     }
 
     HDU& operator[](int idx) {
@@ -273,10 +309,8 @@ class FITS {
     friend auto end(FITS& f){ // -> decltype(f.HDUs.end()){
         return f.HDUs.end();
     } 
-    
-    static FITS from_file(std::string filename);
 
-    void to_file(std::string filename);
+    void write();
 };
 
 #endif

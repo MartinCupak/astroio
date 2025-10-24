@@ -78,8 +78,7 @@ namespace {
    }    
 }
 
-void Images::save_fits_file(const std::string filename, float* data, long side_x, long side_y){
-    FITS fitsImage;
+void Images::save_fits_file(FITS& fits_file, float* data, long side_x, long side_y){
     FITS::HDU hdu;
     hdu.set_image(data,  side_x, side_y);
     
@@ -104,47 +103,67 @@ void Images::save_fits_file(const std::string filename, float* data, long side_x
     hdu.add_keyword("PV2_1", xi  , "" );
     hdu.add_keyword("PV2_2", eta , "" );
     
-    fitsImage.add_HDU(hdu);
-    fitsImage.to_file(filename);
+    fits_file.add_HDU(hdu);
+}
+
+void Images::to_fits_file(const std::string& directory_path, size_t interval, size_t fine_channel, bool save_as_complex, bool save_imaginary){
+    if(!blink::imager::dir_exists(directory_path))
+        blink::imager::create_directory(directory_path);
+    std::stringstream full_file_path;
+    full_file_path << std::setfill('0') << directory_path << "/" << "start_time_" << obsInfo.startTime << \
+        "_" << "int_" << std::setw(2) << interval <<  std::setw(0) << "_coarse_" <<  std::setw(3) <<  \
+        obsInfo.coarseChannel <<  std::setw(0) << "_fine_ch" <<  std::setw(2) << fine_channel;
+    if(save_as_complex) full_file_path << "_complex";
+    else full_file_path << "_real";
+    if(save_imaginary) full_file_path  << "_imag";
+    full_file_path << ".fits";
+    std::string full_file_path_str {full_file_path.str()};
+    FITS fits_file {full_file_path_str, FITS::Mode::APPEND};
+    to_fits_file(fits_file, interval, fine_channel, save_as_complex, save_imaginary);
 }
 
 
-
-void Images::to_fits_file(size_t interval, size_t fine_channel, const std::string& directory_path, bool save_as_complex, bool save_imaginary){
+void Images::to_fits_file(FITS& fits_file, size_t interval, size_t fine_channel, bool save_as_complex, bool save_imaginary){
     if(on_gpu()) to_cpu();
-    if(!blink::imager::dir_exists(directory_path))
-        blink::imager::create_directory(directory_path);
     if(!img_real) img_real.allocate(this->image_size());
     if(!img_imag) img_imag.allocate(this->image_size());
     std::complex<float> *current_data {this->data() + this->image_size() * this->n_channels * interval + fine_channel * this->image_size()}; 
-    std::stringstream full_file_path;
-    full_file_path << std::setfill('0') << directory_path << "/" << "start_time_" << obsInfo.startTime << \
-        "_" << "int_" << std::setw(2) << interval <<  std::setw(0) << "_coarse_" <<  std::setw(3) <<  obsInfo.coarseChannel <<  std::setw(0) << "_fine_ch" <<  std::setw(2) << fine_channel;
-    std::string full_file_path_str {full_file_path.str()};
+    
     if(save_as_complex){
-        std::string filename {full_file_path_str + "_image.fits"};
         std::complex<float>* p_data = this->at(interval, fine_channel);
-        save_fits_file(filename, reinterpret_cast<float*>(p_data), this->side_size, this->side_size *2 );
+        save_fits_file(fits_file, reinterpret_cast<float*>(p_data), this->side_size, this->side_size * 2);
     }else{
         for(size_t i {0}; i < this->image_size(); i++){
             img_real[i] = current_data[i].real();
         }
-        save_fits_file(full_file_path_str + "_image_real.fits", img_real.data(), this->side_size, this->side_size );
+        save_fits_file(fits_file, img_real.data(), this->side_size, this->side_size);
         if(save_imaginary){
             for(size_t i {0}; i < this->image_size(); i++){
                 img_imag[i] = current_data[i].imag();
             }
-            save_fits_file(full_file_path_str + "_image_imag.fits", img_imag.data(), this->side_size, this->side_size );
+            save_fits_file(fits_file, img_imag.data(), this->side_size, this->side_size);
         }
     }    
 }
 
 
 void Images::to_fits_files(const std::string& directory_path, bool save_as_complex, bool save_imaginary) {
+    if(!blink::imager::dir_exists(directory_path))
+        blink::imager::create_directory(directory_path);
+    std::stringstream full_file_path;
+    full_file_path << std::setfill('0') << directory_path << "/" << "start_time_" << obsInfo.startTime << \
+        "_coarse_" <<  std::setw(3) << obsInfo.coarseChannel;
+    if(save_as_complex) full_file_path << "_complex";
+    else full_file_path << "_real";
+    if(save_imaginary) full_file_path  << "_imag";
+    full_file_path << ".fits";
+    std::string full_file_path_str {full_file_path.str()};
+
+    FITS fits_file {full_file_path_str, FITS::Mode::APPEND};
     if(on_gpu()) to_cpu();
     for(size_t interval {0}; interval < this->n_intervals; interval++){
         for(size_t fine_channel {0}; fine_channel < this->n_channels; fine_channel++){
-            to_fits_file(interval, fine_channel, directory_path, save_as_complex, save_imaginary);
+            to_fits_file(fits_file, interval, fine_channel, save_as_complex, save_imaginary);
         }
     }
 }

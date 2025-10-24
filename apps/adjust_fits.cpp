@@ -34,7 +34,7 @@ int main(int argc, char **argv){
         return 0;
     }
 
-    auto myFITSImage = FITS::from_file(argv[1]);
+    auto myFITSImage = FITS {argv[1], FITS::Mode::READ};
 
     std::ifstream fp {argv[2]};
     // remove file if exists already - we overwrite by default.
