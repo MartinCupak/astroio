@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+# tested only on Ubuntu 24.04
 
 #sudo apt install plantuml        # the UML renderer ✓
 #sudo apt install doxygen         # ✓
