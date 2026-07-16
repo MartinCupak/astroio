@@ -24,11 +24,13 @@ struct ObservationInfo {
     unsigned int nAntennas;
     unsigned int nFrequencies;
     unsigned int nPolarizations;
+    // number of spectra (ffts) in observaton
     unsigned int nTimesteps;
     // Time resolution in seconds
     double timeResolution;
     // Fine channel frequency resolution in MHz
     double frequencyResolution;
+    // coarse channel bandwidth in MHz
     double coarseChannelBandwidth;
     // Time when the observation starts.
     time_t startTime;
