@@ -261,8 +261,14 @@ Voltages Voltages::from_dat_file_gpu(const std::string& filename, const Observat
 
 Voltages Voltages::from_memory(const int8_t *buffer, size_t length, const ObservationInfo& obsInfo, unsigned int nIntegrationSteps){
     const size_t bytesPerComplexSample {2}; // 4+4 bits 
+    std::cout << "obsInfo.nFrequencies = " << obsInfo.nFrequencies << std::endl
+              << "obsInfo.nAntennas = " << obsInfo.nAntennas << std::endl
+              << "obsInfo.nPolarizations = " << obsInfo.nPolarizations << std::endl;
     const size_t nSamplesInTimestep {obsInfo.nFrequencies * obsInfo.nAntennas *  obsInfo.nPolarizations};
+    std::cout << "nSamplesInTimestep = " << nSamplesInTimestep << std::endl;
+    std::cout << "obsInfo.nTimesteps = " << obsInfo.nTimesteps << std::endl;    
     const size_t nComplexSamples {obsInfo.nTimesteps * nSamplesInTimestep};
+    std::cout << "nComplexSamples = " << nComplexSamples << std::endl;
     const size_t samplesSize {nComplexSamples * bytesPerComplexSample};
     if(length != nComplexSamples * bytesPerComplexSample){
         std::cerr << "Error: unexpected buffer size (" << length << "). Expected " <<  samplesSize << std::endl;
@@ -300,6 +306,53 @@ Voltages Voltages::from_memory(const int8_t *buffer, size_t length, const Observ
     return {std::move(mbVoltages), obsInfo, nIntegrationSteps};
 }
 
+
+MemoryBuffer<std::complex<float>> Voltages::from_memory_float(const float *buffer, size_t length, const ObservationInfo& obsInfo, unsigned int nIntegrationSteps){
+    const size_t bytesPerComplexSample {8}; // 4+4 bytes float 
+    std::cout << "obsInfo.nFrequencies = " << obsInfo.nFrequencies << std::endl
+              << "obsInfo.nAntennas = " << obsInfo.nAntennas << std::endl
+              << "obsInfo.nPolarizations = " << obsInfo.nPolarizations << std::endl;
+    const size_t nSamplesInTimestep {obsInfo.nFrequencies * obsInfo.nAntennas *  obsInfo.nPolarizations};
+    std::cout << "nSamplesInTimestep = " << nSamplesInTimestep << std::endl;
+    std::cout << "obsInfo.nTimesteps = " << obsInfo.nTimesteps << std::endl;    
+    const size_t nComplexSamples {obsInfo.nTimesteps * nSamplesInTimestep};
+    std::cout << "nComplexSamples = " << nComplexSamples << std::endl;
+    const size_t samplesSize {nComplexSamples * bytesPerComplexSample};
+    if(length != nComplexSamples * bytesPerComplexSample){
+        std::cerr << "Error: unexpected buffer size (" << length << "). Expected " <<  samplesSize << std::endl;
+        throw std::exception(); // TODO bette exception.
+    }
+    size_t samplesInPol {nIntegrationSteps};
+    const size_t samplesInAntenna {samplesInPol * obsInfo.nPolarizations};
+    const size_t samplesInFrequency {samplesInAntenna * obsInfo.nAntennas};
+    const size_t samplesInTimeInterval {samplesInFrequency * obsInfo.nFrequencies};
+    size_t currentTimeInterval;
+    size_t currentIntegratorStep;
+    const size_t nIntegrationIntervals {(obsInfo.nTimesteps + nIntegrationSteps - 1)/ nIntegrationSteps };
+    size_t sample_idx {0};
+    /*
+        We allocate slightly more memory than simply nComplexSamples so we can avoid dealing with
+        the boundary condition happening when obsInfo.nTimesteps % nIntegrationSteps != 0. 
+    */
+    MemoryBuffer<std::complex<float>> mbVoltages {nIntegrationIntervals * samplesInTimeInterval};
+    auto voltages = mbVoltages.data();
+    memset(voltages, 0, sizeof(std::complex<float>) * nIntegrationIntervals * samplesInTimeInterval);
+    for(size_t ts = 0; ts < obsInfo.nTimesteps; ts++){
+        currentTimeInterval = ts / nIntegrationSteps;
+        currentIntegratorStep = ts % nIntegrationSteps;
+        for(size_t ch = 0; ch < obsInfo.nFrequencies; ch++){
+            for(size_t a = 0; a < obsInfo.nAntennas; a++){
+                // output layout is Time, Frequency, Antenna, Polarization, Integration Step
+                 size_t outIndex = currentTimeInterval * samplesInTimeInterval + ch * samplesInFrequency + a * samplesInAntenna;
+                voltages[outIndex + currentIntegratorStep].real(buffer[sample_idx++]);
+                voltages[outIndex + currentIntegratorStep].imag(buffer[sample_idx++]);
+                voltages[outIndex + samplesInPol + currentIntegratorStep].real(buffer[sample_idx++]);
+                voltages[outIndex + samplesInPol + currentIntegratorStep].imag(buffer[sample_idx++]);         
+            }
+        }
+    }
+    return {std::move(mbVoltages), obsInfo, nIntegrationSteps};
+}
 
 
 Voltages Voltages::from_eda2_file(const std::string& filename, const ObservationInfo& obs_info, unsigned int nIntegrationSteps){

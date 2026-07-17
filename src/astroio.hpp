@@ -155,6 +155,8 @@ class Voltages : public MemoryBuffer<std::complex<int8_t>> {
      */
     static Voltages from_memory(const int8_t *buffer, size_t length, const ObservationInfo& obsInfo, unsigned int nIntegrationSteps);
 
+    static MemoryBuffer<std::complex<float>> from_memory_float(const float *buffer, size_t length, const ObservationInfo& obsInfo, unsigned int nIntegrationSteps);
+
 
 
     /**
